@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Events as _, MockAuth, MockAuthInvoke},
-    token::StellarAssetClient,
+    token::{StellarAssetClient, TokenClient},
     Address, Event, IntoVal,
 };
 
@@ -212,6 +212,37 @@ fn an_allowance_below_one_period_blocks_charges_until_it_is_restored() {
     s.client.charge(&s.merchant, &id);
     assert_eq!(s.sub(id).total_charged, AMOUNT);
     assert_eq!(s.sub(id).next_charge_ledger, s.ledger() + INTERVAL);
+}
+
+#[test]
+fn cancelling_in_one_token_leaves_the_allowance_for_another_token_untouched() {
+    let s = Setup::new();
+    let other_token = s
+        .env
+        .register_stellar_asset_contract_v2(s.admin.clone())
+        .address();
+    StellarAssetClient::new(&s.env, &other_token).mint(&s.subscriber, &START_BALANCE);
+
+    let in_a = s.subscribe();
+    s.client.subscribe(
+        &s.subscriber,
+        &s.merchant,
+        &other_token,
+        &AMOUNT,
+        &INTERVAL,
+        &CAP,
+        &0,
+    );
+    let b = TokenClient::new(&s.env, &other_token);
+    assert_eq!(s.allowance(), CAP);
+    assert_eq!(b.allowance(&s.subscriber, &s.client.address), CAP);
+
+    s.client.cancel(&s.subscriber, &in_a);
+
+    // Token A drops by the cancelled subscription's remaining cap...
+    assert_eq!(s.allowance(), 0);
+    // ...and token B is unchanged.
+    assert_eq!(b.allowance(&s.subscriber, &s.client.address), CAP);
 }
 
 #[test]
