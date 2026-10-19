@@ -147,6 +147,42 @@ fn refresh_allowance_only_counts_open_subscriptions_in_that_token() {
 }
 
 #[test]
+fn refresh_allowance_with_nothing_open_approves_zero_and_emits_the_event() {
+    let s = Setup::new();
+
+    // A subscriber who has never subscribed.
+    let approved = s.client.refresh_allowance(&s.subscriber, &s.token.address);
+    assert_eq!(
+        s.env.events().all().filter_by_contract(&s.client.address),
+        [AllowanceRefreshed {
+            subscriber: s.subscriber.clone(),
+            token: s.token.address.clone(),
+            amount: 0,
+        }
+        .to_xdr(&s.env, &s.client.address)]
+    );
+    assert_eq!(approved, 0);
+    assert_eq!(s.allowance(), 0);
+
+    // And again once everything has been cancelled.
+    let id = s.subscribe();
+    s.client.cancel(&s.subscriber, &id);
+
+    let approved = s.client.refresh_allowance(&s.subscriber, &s.token.address);
+    assert_eq!(
+        s.env.events().all().filter_by_contract(&s.client.address),
+        [AllowanceRefreshed {
+            subscriber: s.subscriber.clone(),
+            token: s.token.address.clone(),
+            amount: 0,
+        }
+        .to_xdr(&s.env, &s.client.address)]
+    );
+    assert_eq!(approved, 0);
+    assert_eq!(s.allowance(), 0);
+}
+
+#[test]
 fn refresh_allowance_requires_the_subscribers_signature() {
     let s = Setup::new();
     s.subscribe();
